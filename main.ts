@@ -1330,6 +1330,104 @@ export default class CopyDocumentAsHTMLPlugin extends Plugin {
 		return this.doCopy(markdown, file.path, file.name, true);
 	}
 
+	private convertHtmlToPlainText(htmlElement: HTMLElement): string {
+		// Clone the element to avoid modifying the original
+		const clone = htmlElement.cloneNode(true) as HTMLElement;
+		
+		// Remove elements that shouldn't appear in plain text
+		clone.querySelectorAll('script, style, svg').forEach(el => el.remove());
+		
+		// Convert HTML to plain text while preserving structure
+		let plainText = this.htmlToPlainText(clone);
+		
+		// Clean up whitespace while preserving paragraph breaks
+		// Replace multiple consecutive empty lines with just two newlines
+		plainText = plainText.replace(/\n\s*\n\s*\n+/g, '\n\n');
+		
+		// Remove trailing whitespace from lines
+		plainText = plainText.replace(/[ \t]+$/gm, '');
+		
+		// Trim overall whitespace
+		plainText = plainText.trim();
+		
+		return plainText;
+	}
+	
+	private htmlToPlainText(element: HTMLElement): string {
+		let text = '';
+		
+		// Handle different element types
+		switch (element.tagName.toLowerCase()) {
+			case 'br':
+				return '\n';
+			case 'p':
+			case 'div':
+			case 'section':
+			case 'article':
+				// Add paragraph breaks
+				text = this.processChildNodes(element);
+				return text + '\n\n';
+			case 'h1':
+			case 'h2':
+			case 'h3':
+			case 'h4':
+			case 'h5':
+			case 'h6':
+				// Add header breaks
+				text = this.processChildNodes(element);
+				return text + '\n\n';
+			case 'li':
+				// List items
+				text = this.processChildNodes(element);
+				return text + '\n';
+			case 'ul':
+			case 'ol':
+				// Lists
+				text = this.processChildNodes(element);
+				return text + '\n\n';
+			case 'blockquote':
+				// Blockquotes
+				text = this.processChildNodes(element);
+				return text + '\n\n';
+			case 'pre':
+				// Code blocks
+				text = this.processChildNodes(element);
+				return text + '\n\n';
+			case 'code':
+				// Inline code
+				return element.textContent || '';
+			case 'a':
+				// Links - use text content, not href
+				return element.textContent || '';
+			case 'img':
+				// Images - use alt text if available
+				return element.getAttribute('alt') || '';
+			case 'hr':
+				// Horizontal rules
+				return '\n\n';
+			default:
+				// For other elements, just process child nodes
+				return this.processChildNodes(element);
+		}
+	}
+	
+	private processChildNodes(element: HTMLElement): string {
+		let text = '';
+		
+		for (let i = 0; i < element.childNodes.length; i++) {
+			const child = element.childNodes[i];
+			if (child.nodeType === Node.TEXT_NODE) {
+				// Text node
+				text += child.textContent || '';
+			} else if (child.nodeType === Node.ELEMENT_NODE) {
+				// Element node
+				text += this.htmlToPlainText(child as HTMLElement);
+			}
+		}
+		
+		return text;
+	}
+
 	private async doCopy(markdown: string, path: string, name: string, isFullDocument: boolean) {
 		console.log(`Copying "${path}" to clipboard...`);
 		const title = name.replace(/\.md$/i, '');
@@ -1354,20 +1452,27 @@ export default class CopyDocumentAsHTMLPlugin extends Plugin {
 				? htmlBody.outerHTML
 				: this.expandHtmlTemplate(htmlBody.outerHTML, title);
 
+			// Convert HTML to plain text for text/plain clipboard
+			const plainText = this.convertHtmlToPlainText(htmlBody);
+			
+			// Add title to plain text if fileNameAsHeader is enabled
+			const plainTextWithTitle = this.settings.fileNameAsHeader && isFullDocument 
+				? `${title}\n\n${plainText}`
+				: plainText;
+
 			const data =
 				new ClipboardItem({
 					"text/html": new Blob([htmlDocument], {
-						// @ts-ignore
-						type: ["text/html", 'text/plain']
+						type: "text/html"
 					}),
-					"text/plain": new Blob([htmlDocument], {
+					"text/plain": new Blob([plainTextWithTitle], {
 						type: "text/plain"
 					}),
 				});
 
 			await navigator.clipboard.write([data]);
-			console.log(`Copied to clipboard as HTML`);
-			new Notice(`Copied to clipboard as HTML`)
+			console.log(`Copied to clipboard as HTML and plain text`);
+			new Notice(`Copied to clipboard as HTML and plain text`)
 		} catch (error) {
 			new Notice(`copy failed: ${error}`);
 			console.error('copy failed', error);
