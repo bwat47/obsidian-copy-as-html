@@ -1454,25 +1454,18 @@ export default class CopyDocumentAsHTMLPlugin extends Plugin {
 
 			// Convert HTML to plain text for text/plain clipboard
 			const plainText = this.convertHtmlToPlainText(htmlBody);
-<<<<<<< HEAD
 			
 			// Add title to plain text if fileNameAsHeader is enabled
 			const plainTextWithTitle = this.settings.fileNameAsHeader && isFullDocument 
 				? `${title}\n\n${plainText}`
 				: plainText;
-=======
->>>>>>> 2d4ff16 (Fixed bug where filename was included twice in text/plain output with Include filename as header enabled)
 
 			const data =
 				new ClipboardItem({
 					"text/html": new Blob([htmlDocument], {
 						type: "text/html"
 					}),
-<<<<<<< HEAD
 					"text/plain": new Blob([plainTextWithTitle], {
-=======
-					"text/plain": new Blob([plainText], {
->>>>>>> 2d4ff16 (Fixed bug where filename was included twice in text/plain output with Include filename as header enabled)
 						type: "text/plain"
 					}),
 				});
